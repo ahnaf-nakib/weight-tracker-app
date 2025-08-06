@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weight Tracker</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(to right, #e0f7fa, #fffde7);
+      }
+      h1 {
+        text-align: center;
+        color: #00796b;
+        margin-bottom: 20px;
+      }
+      #authDiv,
+      #app {
+        max-width: 600px;
+        margin: auto;
+        padding: 20px;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        animation: fadeIn 1s ease-in-out;
+        margin-bottom: 30px;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      input,
+      button {
+        width: 100%;
+        padding: 10px;
+        margin-top: 10px;
+        font-size: 16px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+      }
+      button {
+        background: #00796b;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      button:hover {
+        background: #004d40;
+      }
+      table {
+        width: 100%;
+        margin-top: 20px;
+        border-collapse: collapse;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      th,
+      td {
+        padding: 10px;
+        text-align: center;
+        border-bottom: 1px solid #eee;
+      }
+      th {
+        background: #00796b;
+        color: white;
+      }
+      td {
+        background: #fafafa;
+      }
+      #chartContainer {
+        margin-top: 40px;
+      }
+      footer {
+        text-align: center;
+        margin-top: 40px;
+        color: #555;
+        font-size: 14px;
+      }
+      #logoutBtn {
+        background: #e74c3c;
+        margin-top: 0;
+        margin-bottom: 15px;
+      }
+      #logoutBtn:hover {
+        background: #c0392b;
+      }
+      #authMessage {
+        color: red;
+        margin-top: 10px;
+        font-weight: 600;
+      }
+      /* NEW: Delete button style */
+      .delete-btn {
+        background: #f44336;
+        color: white;
+        padding: 5px 10px;
+        font-size: 12px;
+        width: auto;
+        margin: 0;
+      }
+      .delete-btn:hover {
+        background: #d32f2f;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📊 Weight Tracker</h1>
+
+    <div id="authDiv">
+      <input type="email" id="email" placeholder="Email" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <button onclick="login()">Login</button>
+      <button onclick="register()">Register</button>
+      <p id="authMessage"></p>
+    </div>
+
+    <div id="app" style="display: none">
+      <button id="logoutBtn" onclick="logout()">Logout</button>
+
+      <input
+        type="number"
+        id="weightInput"
+        placeholder="Enter your weight (kg)"
+      />
+      <button onclick="addWeight()">➕ Add Weight</button>
+
+      <table id="weightTable">
+        <thead>
+          <tr>
+            <th>📅 Date</th>
+            <th>⚖️ Weight</th>
+            <th>🗑️ Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div id="chartContainer">
+        <canvas id="weightChart" height="150"></canvas>
+      </div>
+    </div>
+
+    <footer>Developed by Ahnaf Nakib</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyCSRADnSnKx_tW66O4XIpp2GDTpu6RgDYU",
+        authDomain: "weight-tracker-780ec.firebaseapp.com",
+        projectId: "weight-tracker-780ec",
+        storageBucket: "weight-tracker-780ec.appspot.com",
+        messagingSenderId: "619512104594",
+        appId: "1:619512104594:web:e3d48e3f802c33ccf6c84b",
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+
+      const authDiv = document.getElementById("authDiv");
+      const appDiv = document.getElementById("app");
+      const authMessage = document.getElementById("authMessage");
+      const weightsTableBody = document.querySelector("#weightTable tbody");
+
+      let currentUser;
+      let chart;
+
+      // Auth state observer
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          currentUser = user;
+          authDiv.style.display = "none";
+          appDiv.style.display = "block";
+          authMessage.textContent = "";
+          loadWeights();
+        } else {
+          currentUser = null;
+          authDiv.style.display = "block";
+          appDiv.style.display = "none";
+        }
+      });
+
+      function register() {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        auth
+          .createUserWithEmailAndPassword(email, password)
+          .then(() => {
+            authMessage.textContent =
+              "Registration successful! You can login now.";
+            authMessage.style.color = "green";
+          })
+          .catch((error) => {
+            authMessage.textContent = error.message;
+            authMessage.style.color = "red";
+          });
+      }
+
+      function login() {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        auth
+          .signInWithEmailAndPassword(email, password)
+          .then(() => {
+            authMessage.textContent = "";
+          })
+          .catch((error) => {
+            authMessage.textContent = error.message;
+            authMessage.style.color = "red";
+          });
+      }
+
+      function logout() {
+        auth.signOut();
+      }
+
+      function addWeight() {
+        const weight = parseFloat(document.getElementById("weightInput").value);
+        if (!weight || weight <= 0) {
+          alert("Please enter a valid weight.");
+          return;
+        }
+
+        db.collection("weights")
+          .add({
+            userId: currentUser.uid,
+            weight: weight,
+            date: firebase.firestore.Timestamp.fromDate(new Date()),
+          })
+          .then(() => {
+            document.getElementById("weightInput").value = "";
+            loadWeights();
+          })
+          .catch((err) => alert(err.message));
+      }
+
+      function loadWeights() {
+        if (!currentUser) return;
+
+        db.collection("weights")
+          .where("userId", "==", currentUser.uid)
+          .orderBy("date", "desc") // Changed to desc for better UX
+          .get()
+          .then((snapshot) => {
+            weightsTableBody.innerHTML = "";
+            const labels = [];
+            const dataPoints = [];
+
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              const date = data.date.toDate().toLocaleDateString();
+              // NEW: Add row with delete button
+              weightsTableBody.innerHTML += `
+                <tr>
+                  <td>${date}</td>
+                  <td>${data.weight} kg</td>
+                  <td>
+                    <button class="delete-btn" data-id="${doc.id}">Delete</button>
+                  </td>
+                </tr>
+              `;
+              labels.push(date);
+              dataPoints.push(data.weight);
+            });
+
+            // Reverse arrays for correct chart order (oldest to newest)
+            renderChart(labels.reverse(), dataPoints.reverse());
+          })
+          .catch((err) => {
+            console.error("Error loading weights:", err);
+          });
+      }
+
+      // NEW: Delete function
+      function deleteWeight(id) {
+        if (confirm("Are you sure you want to delete this entry?")) {
+          db.collection("weights")
+            .doc(id)
+            .delete()
+            .then(() => {
+              console.log("Weight entry deleted successfully!");
+              loadWeights(); // Refresh the table and chart
+            })
+            .catch((error) => {
+              console.error("Error removing document: ", error);
+              alert("Could not delete weight entry.");
+            });
+        }
+      }
+
+      // NEW: Event listener for delete buttons
+      weightsTableBody.addEventListener("click", function (event) {
+        if (event.target.classList.contains("delete-btn")) {
+          const docId = event.target.dataset.id;
+          deleteWeight(docId);
+        }
+      });
+
+      function renderChart(labels, dataPoints) {
+        const ctx = document.getElementById("weightChart").getContext("2d");
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Weight (kg)",
+                data: dataPoints,
+                fill: true,
+                borderColor: "#00796b",
+                backgroundColor: "rgba(0,121,107,0.1)",
+                tension: 0.3,
+                pointBackgroundColor: "#00796b",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: { beginAtZero: false },
+            },
+          },
+        });
+      }
+    </script>
+  </body>
+</html>
